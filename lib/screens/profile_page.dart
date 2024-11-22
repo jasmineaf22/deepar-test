@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // For image selection
 import '../services/profile_service.dart';
@@ -40,47 +39,6 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         isLoading = false;
       });
-    }
-  }
-
-  Future<void> _updateUserName(String newName) async {
-    try {
-      await _profileService.updateUserName(newName);
-      setState(() {
-        name = newName;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name updated successfully')),
-      );
-    } catch (e) {
-      print('Error updating name: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update name')),
-      );
-    }
-  }
-
-  Future<void> _updateProfilePicture() async {
-    try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-      if (pickedFile != null) {
-        File image = File(pickedFile.path);
-        String downloadUrl = await _profileService.uploadProfilePicture(image);
-        await _profileService.updateProfilePicture(downloadUrl);
-        setState(() {
-          profilePictureUrl = downloadUrl;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile picture updated successfully')),
-        );
-      }
-    } catch (e) {
-      print('Error updating profile picture: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to update profile picture')),
-      );
     }
   }
 
@@ -127,20 +85,6 @@ class _ProfilePageState extends State<ProfilePage> {
               email ?? 'Email not available',
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                String newName = await _showNameEditDialog(context);
-                if (newName.isNotEmpty) {
-                  _updateUserName(newName);
-                }
-              },
-              child: const Text('Edit Name'),
-            ),
-            ElevatedButton(
-              onPressed: _updateProfilePicture,
-              child: const Text('Edit Profile Picture'),
-            ),
             const Spacer(),
             ElevatedButton(
               onPressed: _logout,
@@ -153,38 +97,5 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
-  }
-
-  Future<String> _showNameEditDialog(BuildContext context) async {
-    TextEditingController controller = TextEditingController();
-    String result = '';
-
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Edit Name'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: 'Enter new name'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                result = controller.text;
-                Navigator.of(context).pop();
-              },
-              child: const Text('Save'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-
-    return result;
   }
 }

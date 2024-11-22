@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'home_page.dart';
+import 'Home_page.dart';
 import 'profile_page.dart';
 
 class LoginPage extends StatelessWidget {
@@ -16,7 +16,7 @@ class LoginPage extends StatelessWidget {
           onPressed: () async {
             final user = await AuthService().signInWithGoogle();
             if (user != null) {
-              // Navigate to the HomePage on successful login
+              // Navigate to the CameraPage on successful login
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => const HomePage()),
