@@ -1,3 +1,17 @@
+buildscript {
+    repositories {
+        google() // Ensure this is present
+        mavenCentral()
+        maven {
+            url "https://sdk.developer.deepar.ai/maven-android-repository/releases/"
+        }
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.0.2' // Ensure Gradle version is compatible
+        classpath 'com.google.gms:google-services:4.3.15' // Add the Google Services plugin
+    }
+}
+
 allprojects {
     repositories {
         google()
@@ -7,7 +21,6 @@ allprojects {
         }
     }
 }
-
 
 rootProject.buildDir = "../build"
 subprojects {

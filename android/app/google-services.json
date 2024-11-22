@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "836260276768",
+    "project_id": "cipherlens-dc965",
+    "storage_bucket": "cipherlens-dc965.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836260276768:android:f6081c7136fa1e3407aa45",
+        "android_client_info": {
+          "package_name": "com.example.deepar_test"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZikfrcLUotKTbYOktVi2s1J0AxHC5Y9w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
