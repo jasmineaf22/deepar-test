@@ -1,4 +1,4 @@
-import 'package:deepar_test/screens/filter_model.dart';
+import 'package:deepar_test/models/filter_model.dart';
 
 final filters = [
   FilterModel(imagePath: 'Neon_Devil_Horns.png', filterPath: 'Neon_Devil_Horns.deepar'),

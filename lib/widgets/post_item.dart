@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../models/post_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/timeline_service.dart'; // Import your TimelineService
 
-class PostItem extends StatelessWidget {
+class PostItem extends StatefulWidget {
   final Post post;
   final VoidCallback onLike;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback? onTap; // Optional onTap parameter
 
   const PostItem({
     Key? key,
@@ -15,83 +17,127 @@ class PostItem extends StatelessWidget {
     required this.onLike,
     required this.onEdit,
     required this.onDelete,
+    this.onTap, // Add this parameter
   }) : super(key: key);
+
+  @override
+  _PostItemState createState() => _PostItemState();
+}
+
+class _PostItemState extends State<PostItem> {
+  late bool isLiked;
+
+  @override
+  void initState() {
+    super.initState();
+    isLiked = widget.post.likedBy.contains(FirebaseAuth.instance.currentUser?.uid);
+  }
 
   String _formatTimeAgo(DateTime timestamp) {
     return timeago.format(timestamp);
   }
 
+  void _toggleLike() {
+    setState(() {
+      isLiked = !isLiked;
+    });
+
+    // Call the onLike function passed as a parameter to update the like status
+    widget.onLike();
+
+    // Optionally, you can also toggle the like on Firestore
+    TimelineService().likePost(widget.post.id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    return Card(
-      margin: const EdgeInsets.all(8.0),
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundImage: post.profileImageUrl.isNotEmpty
-                          ? NetworkImage(post.profileImageUrl)
-                          : null,
-                      child: post.profileImageUrl.isEmpty
-                          ? const Icon(Icons.person, size: 20)
-                          : null,
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      post.userName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Text(
-                  _formatTimeAgo(post.timestamp),
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8.0),
-            if (post.imageUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Image.network(post.imageUrl),
-              ),
-            Text(post.content),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('${post.likeCount} likes'),
-                IconButton(
-                  icon: const Icon(Icons.thumb_up),
-                  onPressed: onLike,
-                ),
-              ],
-            ),
-            if (post.userId == currentUserId)
+    return GestureDetector(
+      onTap: widget.onTap, // This will be triggered if onTap is passed
+      child: Card(
+        margin: const EdgeInsets.all(8.0),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: onEdit,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundImage: widget.post.profileImageUrl.isNotEmpty
+                            ? NetworkImage(widget.post.profileImageUrl)
+                            : null,
+                        child: widget.post.profileImageUrl.isEmpty
+                            ? const Icon(Icons.person, size: 20)
+                            : null,
+                      ),
+                      const SizedBox(width: 8.0),
+                      Text(
+                        widget.post.userName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: onDelete,
+                  Text(
+                    _formatTimeAgo(widget.post.timestamp),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
-          ],
+              const SizedBox(height: 8.0),
+              if (widget.post.imageUrl.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Image.network(widget.post.imageUrl),
+                ),
+              Text(widget.post.content),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('${widget.post.likeCount} likes'),
+                  IconButton(
+                    icon: const Icon(Icons.thumb_up),
+                    onPressed: _toggleLike,
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                children: [
+                  // Displaying comment count
+                  Text('${widget.post.commentCount} comments'),
+                  const SizedBox(width: 8),
+                  // Comment icon
+                  IconButton(
+                    icon: const Icon(Icons.comment),
+                    onPressed: () {
+                      // Action to show comments, e.g., open a comments screen
+                    },
+                  ),
+                ],
+              ),
+              if (widget.post.userId == currentUserId)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: widget.onEdit,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete),
+                      onPressed: widget.onDelete,
+                    ),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/timeline_service.dart';
 import '../models/post_model.dart';
 import '../widgets/post_item.dart';
 import 'camera_page.dart';
 import 'create_post_page.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'post_detail_page.dart';
+import 'chat_list_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,16 +19,27 @@ class _HomePageState extends State<HomePage> {
   final PageController _pageController = PageController(initialPage: 1);
   final TimelineService timelineService = TimelineService();
   late Future<List<Post>> postsFuture;
-  bool isTimelinePage = true; // Track whether we're on the timeline page
+  List<Post> posts = [];
+  bool isTimelinePage = true;
+
+  // Fetch the current user ID
+  late String currentUserId;
 
   @override
   void initState() {
     super.initState();
-    postsFuture = timelineService.fetchPosts();
+    _fetchPosts();
 
-    // Add a listener to the page controller to detect page changes
+    // Get current user ID from Firebase
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      currentUserId = user.uid;
+    } else {
+      // Handle the case where the user is not logged in
+      currentUserId = '';
+    }
+
     _pageController.addListener(() {
-      // Check if the current page is the timeline page (index 1)
       if (_pageController.page == 1) {
         setState(() {
           isTimelinePage = true;
@@ -45,13 +58,19 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  Future<void> _fetchPosts() async {
+    postsFuture = timelineService.fetchPosts();
+    posts = await postsFuture;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: PageView(
         controller: _pageController,
         physics: const BouncingScrollPhysics(),
-        reverse: false,  // Set reverse to false to swipe right to go to the camera
+        reverse: false,
         children: [
           const CameraPage(),
           FutureBuilder<List<Post>>(
@@ -61,23 +80,27 @@ class _HomePageState extends State<HomePage> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              if (posts.isEmpty) {
                 return const Center(child: Text('No posts yet.'));
               }
 
-              return ListView(
-                children: snapshot.data!
-                    .map(
-                      (post) => PostItem(
+              return ListView.builder(
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  final post = posts[index];
+                  return PostItem(
                     post: post,
-                    onLike: () => likePost(post.id),
-                    onEdit: () => _editPost(post),
-                    onDelete: () => _confirmDelete(context, post),
-                  ),
-                )
-                    .toList(),
+                    onLike: () => _toggleLike(post, index),
+                    onEdit: () => _editPost(post), // Pass onEdit here
+                    onDelete: () => _confirmDelete(context, post), // Pass onDelete here
+                    onTap: () => _openPostDetails(post),
+                  );
+                },
               );
             },
+          ),
+          ChatListScreen(
+            currentUserId: currentUserId,
           ),
         ],
       ),
@@ -86,33 +109,55 @@ class _HomePageState extends State<HomePage> {
         onPressed: () async {
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const CreatePostPage()),
+            MaterialPageRoute(
+                builder: (context) => const CreatePostPage()),
           );
-          setState(() {
-            postsFuture = timelineService.fetchPosts(); // Refresh posts after returning
-          });
+          _fetchPosts();
         },
         child: const Icon(Icons.add),
       )
-          : null,  // Hide FAB on the Camera page
+          : null,
     );
   }
 
-  void likePost(String postId) {
-    timelineService.likePost(postId);
+  void _toggleLike(Post post, int index) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    // Determine whether the user already liked the post
+    final isLiked = post.likedBy.contains(currentUserId);
+
+    // Send like/unlike request to the server
+    await timelineService.likePost(post.id);
+
+    // Update the post locally
+    final updatedPost = post.copyWith(
+      likedBy: isLiked
+          ? (post.likedBy..remove(currentUserId)) // Remove user from likes
+          : (post.likedBy..add(currentUserId)), // Add user to likes
+      likeCount: isLiked ? post.likeCount - 1 : post.likeCount + 1,
+    );
+
+    // Update the post in the list
     setState(() {
-      postsFuture = timelineService.fetchPosts();
+      posts[index] = updatedPost;
     });
   }
 
   void _editPost(Post post) async {
     String updatedContent = await _showEditDialog(context, post.content);
     if (updatedContent.isNotEmpty) {
-      timelineService.updatePost(post.id, updatedContent);
-      setState(() {
-        postsFuture = timelineService.fetchPosts();
-      });
+      await timelineService.updatePost(post.id, updatedContent);
+      _fetchPosts();
     }
+  }
+
+  void _openPostDetails(Post post) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(post: post),
+      ),
+    );
   }
 
   void _confirmDelete(BuildContext context, Post post) async {
@@ -141,9 +186,7 @@ class _HomePageState extends State<HomePage> {
 
   void _deletePost(String postId, String imageUrl) async {
     await timelineService.deletePost(postId, imageUrl);
-    setState(() {
-      postsFuture = timelineService.fetchPosts();
-    });
+    _fetchPosts();
   }
 
   Future<String> _showEditDialog(BuildContext context, String currentContent) async {

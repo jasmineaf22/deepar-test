@@ -1,12 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/post_model.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class TimelineService {
   final CollectionReference postsCollection =
   FirebaseFirestore.instance.collection('posts');
+  final FirebaseAuth auth = FirebaseAuth.instance;
   final FirebaseStorage storage = FirebaseStorage.instance;
 
+  /// Fetch all posts, ordered by timestamp (descending)
   Future<List<Post>> fetchPosts() async {
     try {
       final snapshot =
@@ -21,7 +24,7 @@ class TimelineService {
     }
   }
 
-  // Create a new post in Firestore
+  /// Create a new post in Firestore
   Future<void> createPost(Post post) async {
     try {
       await postsCollection.add(post.toFirestore());
@@ -30,15 +33,39 @@ class TimelineService {
     }
   }
 
+  /// Like or Unlike a post
   Future<void> likePost(String postId) async {
     try {
+      final userId = auth.currentUser?.uid;
+      if (userId == null) return; // Ensure user is authenticated
+
       final doc = postsCollection.doc(postId);
-      await doc.update({'likeCount': FieldValue.increment(1)});
+      final snapshot = await doc.get();
+
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data() as Map<String, dynamic>;
+      final List<dynamic> likedBy = data['likedBy'] ?? [];
+
+      if (likedBy.contains(userId)) {
+        // Unlike the post
+        await doc.update({
+          'likedBy': FieldValue.arrayRemove([userId]),
+          'likeCount': FieldValue.increment(-1),
+        });
+      } else {
+        // Like the post
+        await doc.update({
+          'likedBy': FieldValue.arrayUnion([userId]),
+          'likeCount': FieldValue.increment(1),
+        });
+      }
     } catch (e) {
-      print('Error liking post: $e');
+      print('Error liking/unliking post: $e');
     }
   }
 
+  /// Update an existing post
   Future<void> updatePost(String postId, String newContent) async {
     try {
       final doc = postsCollection.doc(postId);
@@ -51,6 +78,7 @@ class TimelineService {
     }
   }
 
+  /// Delete a post and its associated image from Firestore
   Future<void> deletePost(String postId, String imageUrl) async {
     try {
       if (imageUrl.isNotEmpty) {
