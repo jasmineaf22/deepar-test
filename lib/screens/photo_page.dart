@@ -17,7 +17,7 @@ class PhotoPreviewPage extends StatelessWidget {
 
     UploadTask uploadTask = storageRef.putFile(photo);
     TaskSnapshot snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL(); // Return the photo URL
+    return await snapshot.ref.getDownloadURL();
   }
 
   Future<void> createPost(
@@ -26,7 +26,7 @@ class PhotoPreviewPage extends StatelessWidget {
     await postCollection.add({
       'userId': userId,
       'userName': userName,
-      'content': caption, // Custom caption
+      'content': caption,
       'imageUrl': imageUrl,
       'likeCount': 0,
       'commentCount': 0,
@@ -36,7 +36,6 @@ class PhotoPreviewPage extends StatelessWidget {
 
   Future<void> sendToTimeline(BuildContext context) async {
     try {
-      // Ensure the user is authenticated
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         await FirebaseAuth.instance.signInAnonymously();
@@ -46,10 +45,8 @@ class PhotoPreviewPage extends StatelessWidget {
       String userId = user?.uid ?? "anonymousUserId";
       String userName = user?.displayName ?? "Anonymous";
 
-      // Upload photo to Firebase Storage
       String imageUrl = await uploadPhotoToStorage(photo);
 
-      // Show caption input dialog
       final TextEditingController captionController = TextEditingController();
       await showDialog(
         context: context,
@@ -74,20 +71,19 @@ class PhotoPreviewPage extends StatelessWidget {
         },
       );
 
-      // Use the entered caption or a default value
       String caption = captionController.text.isNotEmpty
           ? captionController.text
-          : "Uploaded a photo!";
+          : "";
 
-      // Create post in Firestore
       await createPost(imageUrl, userId, userName, caption);
 
-      // Redirect to Timeline
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send to timeline: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send to timeline: $e')),
+        );
+      }
     }
   }
 
@@ -103,15 +99,164 @@ class PhotoPreviewPage extends StatelessWidget {
           '${downloadsDir.path}/screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
       await photo.copy(newFilePath);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Photo saved to gallery!')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo saved to gallery!')),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save photo to gallery.')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to save photo to gallery.')),
+        );
+      }
     }
   }
+
+  Future<void> sendPhotoToChat(BuildContext context, String chatRoomId) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+        user = FirebaseAuth.instance.currentUser;
+      }
+
+      String imageUrl = await uploadPhotoToStorage(photo);
+
+      FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatRoomId)
+          .collection('messages')
+          .add({
+        'senderId': user?.uid ?? 'anonymousUserId',
+        'imageUrl': imageUrl,
+        'timestamp': FieldValue.serverTimestamp(),
+        'profilePictureUrl': user?.photoURL ?? 'defaultProfilePicURL',
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Photo sent to chat!')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send photo to chat: $e')),
+        );
+      }
+    }
+  }
+
+  void openChatRoomSelector(BuildContext context, String currentUserId) async {
+    try {
+      final chatRoomsSnapshot = await FirebaseFirestore.instance.collection('chats').get();
+      final chatRooms = chatRoomsSnapshot.docs;
+
+      if (chatRooms.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No chat rooms available.')),
+          );
+        }
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        builder: (BuildContext context) {
+          return FutureBuilder<List<Map<String, String>>>(
+            future: getRecipientNamesAndPicturesForChatRooms(chatRooms, currentUserId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text('No recipients found.'));
+              }
+
+              final chatRoomData = snapshot.data!;
+
+              return ListView.builder(
+                shrinkWrap: true,
+                itemCount: chatRoomData.length,
+                itemBuilder: (context, index) {
+                  final chatRoomId = chatRoomData[index]['chatRoomId'];
+                  final recipientName = chatRoomData[index]['name'] ?? 'Unknown';
+                  final profilePictureUrl = chatRoomData[index]['profilePictureUrl'] ?? '';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: profilePictureUrl.isNotEmpty
+                          ? NetworkImage(profilePictureUrl)
+                          : const AssetImage('assets/default_profile_pic.png') as ImageProvider,
+                      onBackgroundImageError: (_, __) {
+                        // Handle errors while loading the profile picture
+                      },
+                    ),
+                    title: Text('$recipientName'),
+                    onTap: () {
+                      sendPhotoToChat(context, chatRoomId!);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error opening chat rooms: $e')),
+        );
+      }
+    }
+  }
+
+  Future<List<Map<String, String>>> getRecipientNamesAndPicturesForChatRooms(
+      List<QueryDocumentSnapshot> chatRooms, String currentUserId) async {
+    List<Map<String, String>> chatRoomData = [];
+
+    for (var chatRoom in chatRooms) {
+      final chatRoomId = chatRoom.id;
+
+      final chatRoomDataMap = chatRoom.data() as Map<String, dynamic>;
+      final participants = chatRoomDataMap['participants'] as List<dynamic>?;
+
+      if (participants == null || participants.isEmpty) {
+        continue;
+      }
+
+      if (participants.contains(currentUserId)) {
+        final otherUserId = participants.firstWhere(
+              (id) => id != currentUserId,
+          orElse: () => '',
+        );
+
+        if (otherUserId.isNotEmpty) {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(otherUserId).get();
+          final userName = userDoc.exists ? userDoc['name'] ?? 'Unknown User' : 'Unknown User';
+          final profilePictureUrl = userDoc.exists ? userDoc['profilePictureUrl'] ?? '' : '';
+
+          chatRoomData.add({
+            'name': userName,
+            'chatRoomId': chatRoomId,
+            'profilePictureUrl': profilePictureUrl,
+          });
+        }
+      }
+    }
+
+    return chatRoomData;
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -125,16 +270,38 @@ class PhotoPreviewPage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              ElevatedButton(
-                onPressed: () async {
-                  await saveToGallery(photo, context);
-                  // Do not pop after saving
-                },
-                child: const Text('Save to Gallery'),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await saveToGallery(photo, context);
+                  },
+                  child: const Text('Save to Gallery'),
+                ),
               ),
-              ElevatedButton(
-                onPressed: () => sendToTimeline(context),
-                child: const Text('Send to Timeline'),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => sendToTimeline(context),
+                  child: const Text('Send to Timeline'),
+                ),
+              ),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    User? user = FirebaseAuth.instance.currentUser;
+                    if (user != null) {
+                      String currentUserId = user.uid;
+                      openChatRoomSelector(context, currentUserId); // Pass currentUserId here
+                    } else {
+                      // Handle case when user is not logged in (e.g., sign in anonymously)
+                      FirebaseAuth.instance.signInAnonymously().then((userCredential) {
+                        String currentUserId = userCredential.user?.uid ?? "anonymousUserId";
+                        openChatRoomSelector(context, currentUserId);
+                      });
+                    }
+                  },
+
+                  child: const Text('Send to People'),
+                ),
               ),
             ],
           ),

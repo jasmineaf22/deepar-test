@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../models/post_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/timeline_service.dart'; // Import your TimelineService
+import '../services/timeline_service.dart';
 
 class PostItem extends StatefulWidget {
   final Post post;
@@ -42,10 +42,7 @@ class _PostItemState extends State<PostItem> {
       isLiked = !isLiked;
     });
 
-    // Call the onLike function passed as a parameter to update the like status
     widget.onLike();
-
-    // Optionally, you can also toggle the like on Firestore
     TimelineService().likePost(widget.post.id);
   }
 
@@ -53,7 +50,7 @@ class _PostItemState extends State<PostItem> {
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     return GestureDetector(
-      onTap: widget.onTap, // This will be triggered if onTap is passed
+      onTap: widget.onTap, // Trigger onTap if passed
       child: Card(
         margin: const EdgeInsets.all(8.0),
         child: Padding(
@@ -102,7 +99,7 @@ class _PostItemState extends State<PostItem> {
                 children: [
                   Text('${widget.post.likeCount} likes'),
                   IconButton(
-                    icon: const Icon(Icons.thumb_up),
+                    icon: Icon(isLiked ? Icons.thumb_up : Icons.thumb_up_outlined),
                     onPressed: _toggleLike,
                   ),
                 ],
@@ -110,15 +107,11 @@ class _PostItemState extends State<PostItem> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  // Displaying comment count
                   Text('${widget.post.commentCount} comments'),
                   const SizedBox(width: 8),
-                  // Comment icon
                   IconButton(
                     icon: const Icon(Icons.comment),
-                    onPressed: () {
-                      // Action to show comments, e.g., open a comments screen
-                    },
+                    onPressed: widget.onTap, // Use onTap for comments too
                   ),
                 ],
               ),

@@ -21,34 +21,18 @@ class _HomePageState extends State<HomePage> {
   late Future<List<Post>> postsFuture;
   List<Post> posts = [];
   bool isTimelinePage = true;
-
-  // Fetch the current user ID
   late String currentUserId;
 
   @override
   void initState() {
     super.initState();
     _fetchPosts();
-
-    // Get current user ID from Firebase
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      currentUserId = user.uid;
-    } else {
-      // Handle the case where the user is not logged in
-      currentUserId = '';
-    }
-
+    currentUserId = user?.uid ?? '';
     _pageController.addListener(() {
-      if (_pageController.page == 1) {
-        setState(() {
-          isTimelinePage = true;
-        });
-      } else {
-        setState(() {
-          isTimelinePage = false;
-        });
-      }
+      setState(() {
+        isTimelinePage = _pageController.page == 1;
+      });
     });
   }
 
@@ -70,7 +54,6 @@ class _HomePageState extends State<HomePage> {
       body: PageView(
         controller: _pageController,
         physics: const BouncingScrollPhysics(),
-        reverse: false,
         children: [
           const CameraPage(),
           FutureBuilder<List<Post>>(
@@ -79,11 +62,9 @@ class _HomePageState extends State<HomePage> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-
               if (posts.isEmpty) {
                 return const Center(child: Text('No posts yet.'));
               }
-
               return ListView.builder(
                 itemCount: posts.length,
                 itemBuilder: (context, index) {
@@ -91,9 +72,9 @@ class _HomePageState extends State<HomePage> {
                   return PostItem(
                     post: post,
                     onLike: () => _toggleLike(post, index),
-                    onEdit: () => _editPost(post), // Pass onEdit here
-                    onDelete: () => _confirmDelete(context, post), // Pass onDelete here
-                    onTap: () => _openPostDetails(post),
+                    onEdit: () => _editPost(post),
+                    onDelete: () => _confirmDelete(context, post),
+                    onTap: () => _openPostDetails(post), // Pass _openPostDetails here
                   );
                 },
               );
@@ -109,8 +90,7 @@ class _HomePageState extends State<HomePage> {
         onPressed: () async {
           await Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (context) => const CreatePostPage()),
+            MaterialPageRoute(builder: (context) => const CreatePostPage()),
           );
           _fetchPosts();
         },
@@ -122,22 +102,14 @@ class _HomePageState extends State<HomePage> {
 
   void _toggleLike(Post post, int index) async {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-
-    // Determine whether the user already liked the post
     final isLiked = post.likedBy.contains(currentUserId);
-
-    // Send like/unlike request to the server
     await timelineService.likePost(post.id);
-
-    // Update the post locally
     final updatedPost = post.copyWith(
       likedBy: isLiked
-          ? (post.likedBy..remove(currentUserId)) // Remove user from likes
-          : (post.likedBy..add(currentUserId)), // Add user to likes
+          ? (post.likedBy..remove(currentUserId))
+          : (post.likedBy..add(currentUserId)),
       likeCount: isLiked ? post.likeCount - 1 : post.likeCount + 1,
     );
-
-    // Update the post in the list
     setState(() {
       posts[index] = updatedPost;
     });
@@ -178,7 +150,6 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
-
     if (confirm) {
       _deletePost(post.id, post.imageUrl);
     }
@@ -192,7 +163,6 @@ class _HomePageState extends State<HomePage> {
   Future<String> _showEditDialog(BuildContext context, String currentContent) async {
     TextEditingController controller = TextEditingController(text: currentContent);
     String result = '';
-
     await showDialog(
       context: context,
       builder: (context) {
@@ -210,15 +180,10 @@ class _HomePageState extends State<HomePage> {
               },
               child: const Text('Save'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
           ],
         );
       },
     );
-
     return result;
   }
 }

@@ -5,6 +5,7 @@ class Message {
   final String senderId;
   final String recipientId;
   final String content;
+  final String? imageUrl;
   final DateTime timestamp;
 
   Message({
@@ -12,6 +13,7 @@ class Message {
     required this.senderId,
     required this.recipientId,
     required this.content,
+    this.imageUrl,
     required this.timestamp,
   });
 
@@ -21,6 +23,7 @@ class Message {
       senderId: data['senderId'],
       recipientId: data['recipientId'],
       content: data['content'],
+      imageUrl: data['imageUrl'],
       timestamp: DateTime.parse(data['timestamp']),
     );
   }
@@ -30,6 +33,7 @@ class Message {
       'senderId': senderId,
       'recipientId': recipientId,
       'content': content,
+      'imageUrl': imageUrl,
       'timestamp': timestamp.toIso8601String(),
     };
   }

@@ -60,16 +60,31 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // Send message to Firestore
-  void sendMessage(String chatRoomId) {
+  void sendMessage(String chatRoomId, {String? imageUrl}) async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && imageUrl == null) return;
 
+    // Check if the chat room exists or not
+    DocumentReference chatRoomRef = FirebaseFirestore.instance.collection('chats').doc(chatRoomId);
+
+    // If chat room does not exist, create it with participants
+    DocumentSnapshot chatRoomSnapshot = await chatRoomRef.get();
+    if (!chatRoomSnapshot.exists) {
+      // Assuming both users are participants
+      await chatRoomRef.set({
+        'participants': [widget.currentUserId, widget.otherUserId], // Add participants
+        // You can add other fields like a last message, timestamp, etc.
+      });
+    }
+
+    // Send message after chat room creation
     FirebaseFirestore.instance
         .collection('chats')
         .doc(chatRoomId)
         .collection('messages')
         .add({
-      'text': text,
+      'text': text.isNotEmpty ? text : null, // Store text if provided
+      'imageUrl': imageUrl, // Store imageUrl if provided
       'senderId': widget.currentUserId,
       'timestamp': FieldValue.serverTimestamp(),
       'profilePictureUrl': currentUserProfilePic,  // Include the current user's profile picture
@@ -155,7 +170,10 @@ class _ChatScreenState extends State<ChatScreen> {
                           Column(
                             crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
-                              Container(
+                              // Check if message contains an image or text
+                              data['imageUrl'] != null
+                                  ? Image.network(data['imageUrl'], width: 200, height: 200)
+                                  : Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
                                   color: isMe ? Colors.blue[100] : Colors.grey[300],
