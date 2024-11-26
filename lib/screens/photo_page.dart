@@ -10,10 +10,20 @@ class PhotoPreviewPage extends StatelessWidget {
 
   const PhotoPreviewPage({super.key, required this.photo});
 
-  Future<String> uploadPhotoToStorage(File photo) async {
+  Future<String> uploadPhotoToTimeline(File photo) async {
     final storageRef = FirebaseStorage.instance
         .ref()
         .child('timeline_photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+    UploadTask uploadTask = storageRef.putFile(photo);
+    TaskSnapshot snapshot = await uploadTask;
+    return await snapshot.ref.getDownloadURL();
+  }
+
+  Future<String> uploadPhotoToChat(File photo) async {
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('chat_photos/${DateTime.now().millisecondsSinceEpoch}.jpg');
 
     UploadTask uploadTask = storageRef.putFile(photo);
     TaskSnapshot snapshot = await uploadTask;
@@ -45,7 +55,7 @@ class PhotoPreviewPage extends StatelessWidget {
       String userId = user?.uid ?? "anonymousUserId";
       String userName = user?.displayName ?? "Anonymous";
 
-      String imageUrl = await uploadPhotoToStorage(photo);
+      String imageUrl = await uploadPhotoToTimeline(photo);
 
       final TextEditingController captionController = TextEditingController();
       await showDialog(
@@ -121,7 +131,7 @@ class PhotoPreviewPage extends StatelessWidget {
         user = FirebaseAuth.instance.currentUser;
       }
 
-      String imageUrl = await uploadPhotoToStorage(photo);
+      String imageUrl = await uploadPhotoToChat(photo);
 
       FirebaseFirestore.instance
           .collection('chats')
