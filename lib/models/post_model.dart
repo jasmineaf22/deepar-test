@@ -26,7 +26,6 @@ class Post {
     this.likedBy = const [], // Initialize likedBy as an empty list by default
   });
 
-  // Factory constructor to create Post from Firestore data
   factory Post.fromFirestore(Map<String, dynamic> data, String id) {
     return Post(
       id: id,
@@ -37,10 +36,13 @@ class Post {
       profileImageUrl: data['profileImageUrl'] ?? '',
       likeCount: data['likeCount'] ?? 0,
       commentCount: data['commentCount'] ?? 0,
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
+      timestamp: data['timestamp'] != null
+          ? (data['timestamp'] as Timestamp).toDate()
+          : DateTime.now(), // Provide a fallback if timestamp is null
       likedBy: List<String>.from(data['likedBy'] ?? []), // Map likedBy field to List<String>
     );
   }
+
 
   // Method to convert Post object to Firestore data
   Map<String, dynamic> toFirestore() {

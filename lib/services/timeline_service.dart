@@ -24,6 +24,19 @@ class TimelineService {
     }
   }
 
+  Stream<List<Post>> streamPosts() {
+    return postsCollection.orderBy('timestamp', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+          snapshot.docs
+              .map((doc) =>
+              Post.fromFirestore(doc.data() as Map<String, dynamic>, doc.id))
+              .toList(),
+    );
+  }
+
+
   /// Create a new post in Firestore
   Future<void> createPost(Post post) async {
     try {
@@ -79,10 +92,14 @@ class TimelineService {
   }
 
 
-
   /// Delete a post and its associated image from Firestore
+// Updated deletePost method in TimelineService
   Future<void> deletePost(String postId, String imageUrl) async {
     try {
+      // First, delete all comments related to the post
+      await _deleteComments(postId);
+
+      // If there's an associated image, delete it from Firebase Storage
       if (imageUrl.isNotEmpty) {
         try {
           await storage.refFromURL(imageUrl).delete();
@@ -90,9 +107,27 @@ class TimelineService {
           print("Error deleting image from Firebase Storage: $e");
         }
       }
+
+      // Delete the post from Firestore
       await postsCollection.doc(postId).delete();
     } catch (e) {
       print('Error deleting post: $e');
+    }
+  }
+
+// Helper method to delete all comments for a specific post
+  Future<void> _deleteComments(String postId) async {
+    try {
+      final commentsSnapshot = await FirebaseFirestore.instance
+          .collection('comments')
+          .where('postId', isEqualTo: postId)
+          .get();
+
+      for (var commentDoc in commentsSnapshot.docs) {
+        await commentDoc.reference.delete(); // Delete each comment
+      }
+    } catch (e) {
+      print('Error deleting comments: $e');
     }
   }
 }

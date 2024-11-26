@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/timeline_service.dart';
 import '../models/post_model.dart';
 import '../widgets/post_item.dart';
@@ -17,18 +18,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final PageController _pageController = PageController(initialPage: 1);
-  final TimelineService timelineService = TimelineService();
-  late Future<List<Post>> postsFuture;
-  List<Post> posts = [];
   bool isTimelinePage = true;
-  late String currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _fetchPosts();
-    final user = FirebaseAuth.instance.currentUser;
-    currentUserId = user?.uid ?? '';
     _pageController.addListener(() {
       setState(() {
         isTimelinePage = _pageController.page == 1;
@@ -42,12 +36,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Future<void> _fetchPosts() async {
-    postsFuture = timelineService.fetchPosts();
-    posts = await postsFuture;
-    setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -56,32 +44,49 @@ class _HomePageState extends State<HomePage> {
         physics: const BouncingScrollPhysics(),
         children: [
           const CameraPage(),
-          FutureBuilder<List<Post>>(
-            future: postsFuture,
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('posts').orderBy('timestamp', descending: true).snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (!snapshot.hasData || snapshot.data == null) {
                 return const Center(child: CircularProgressIndicator());
               }
+
+              final posts = snapshot.data!.docs;
+
               if (posts.isEmpty) {
                 return const Center(child: Text('No posts yet.'));
               }
+
               return ListView.builder(
                 itemCount: posts.length,
                 itemBuilder: (context, index) {
                   final post = posts[index];
+                  final postId = post.id;
+
                   return PostItem(
-                    post: post,
-                    onLike: () => _toggleLike(post, index),
-                    onEdit: () => _editPost(post),
-                    onDelete: () => _confirmDelete(context, post),
-                    onTap: () => _openPostDetails(post), // Pass _openPostDetails here
+                    postId: postId,
+                    post: Post.fromFirestore(post.data() as Map<String, dynamic>, postId),
+                    onLike: () async {
+                      final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+                      final isLiked = (post['likedBy'] as List).contains(currentUserId);
+
+                      await FirebaseFirestore.instance.collection('posts').doc(postId).update({
+                        'likedBy': isLiked
+                            ? FieldValue.arrayRemove([currentUserId])
+                            : FieldValue.arrayUnion([currentUserId]),
+                        'likeCount': isLiked ? FieldValue.increment(-1) : FieldValue.increment(1),
+                      });
+                    },
+                    onEdit: () => _editPost(postId, post['content']),
+                    onDelete: () => _confirmDelete(context, postId, post['imageUrl']),
+                    onTap: () => _openPostDetails(postId),
                   );
                 },
               );
             },
           ),
           ChatListScreen(
-            currentUserId: currentUserId,
+            currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
           ),
         ],
       ),
@@ -92,7 +97,6 @@ class _HomePageState extends State<HomePage> {
             context,
             MaterialPageRoute(builder: (context) => const CreatePostPage()),
           );
-          _fetchPosts();
         },
         child: const Icon(Icons.add),
       )
@@ -100,39 +104,17 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _toggleLike(Post post, int index) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final isLiked = post.likedBy.contains(currentUserId);
-    await timelineService.likePost(post.id);
-    final updatedPost = post.copyWith(
-      likedBy: isLiked
-          ? (post.likedBy..remove(currentUserId))
-          : (post.likedBy..add(currentUserId)),
-      likeCount: isLiked ? post.likeCount - 1 : post.likeCount + 1,
-    );
-    setState(() {
-      posts[index] = updatedPost;
-    });
-  }
-
-  void _editPost(Post post) async {
-    String updatedContent = await _showEditDialog(context, post.content);
+  void _editPost(String postId, String currentContent) async {
+    String updatedContent = await _showEditDialog(context, currentContent);
     if (updatedContent.isNotEmpty) {
-      await timelineService.updatePost(post.id, updatedContent);
-      _fetchPosts();
+      await FirebaseFirestore.instance.collection('posts').doc(postId).update({
+        'content': updatedContent,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
     }
   }
 
-  void _openPostDetails(Post post) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailPage(post: post),
-      ),
-    );
-  }
-
-  void _confirmDelete(BuildContext context, Post post) async {
+  void _confirmDelete(BuildContext context, String postId, String imageUrl) async {
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -150,15 +132,33 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+
     if (confirm) {
-      _deletePost(post.id, post.imageUrl);
+      // Call the deletePost method from TimelineService
+      await TimelineService().deletePost(postId, imageUrl);
     }
   }
 
-  void _deletePost(String postId, String imageUrl) async {
-    await timelineService.deletePost(postId, imageUrl);
-    _fetchPosts();
+
+
+  void _openPostDetails(String postId) async {
+    final docSnapshot = await FirebaseFirestore.instance.collection('posts').doc(postId).get();
+    if (docSnapshot.exists) {
+      final post = Post.fromFirestore(docSnapshot.data() as Map<String, dynamic>, postId);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PostDetailPage(postId: postId),
+        ),
+      );
+    } else {
+      // Handle the case where the document does not exist
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Post not found')),
+      );
+    }
   }
+
 
   Future<String> _showEditDialog(BuildContext context, String currentContent) async {
     TextEditingController controller = TextEditingController(text: currentContent);

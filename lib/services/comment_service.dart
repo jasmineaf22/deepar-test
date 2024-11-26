@@ -22,9 +22,9 @@ class CommentService {
     }
   }
 
-  // Add a new comment
   Future<void> addComment({required String postId, required String content}) async {
     try {
+      // Add the new comment
       await _db.collection('comments').add({
         'postId': postId,
         'content': content,
@@ -32,6 +32,11 @@ class CommentService {
         'userName': FirebaseAuth.instance.currentUser?.displayName ?? 'Anonymous',
         'profileImageUrl': FirebaseAuth.instance.currentUser?.photoURL ?? '',
         'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      // Increment the commentCount in the post document
+      await _db.collection('posts').doc(postId).update({
+        'commentCount': FieldValue.increment(1),
       });
     } catch (e) {
       throw Exception('Failed to add comment: $e');
